@@ -1,60 +1,176 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>International Offer File Example</title>
+  <title>Daily Offer Basis Calculator</title>
   <style>
+    /* Reset some default styles */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      margin: 40px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f6f8;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .container {
       max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: #ffffff;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
     }
+
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+
     h2 {
-      margin-top: 3em;
-      margin-bottom: 0.5em;
+      color: #34495e;
+      margin-top: 2.5em;
+      margin-bottom: 0.75em;
+      border-bottom: 2px solid #ecf0f1;
+      padding-bottom: 0.3em;
     }
+
     .upload-section {
-      border: 1px solid #ccc;
-      padding: 1em;
+      background-color: #ecf0f1;
+      padding: 20px;
+      border-radius: 8px;
       margin-bottom: 2em;
     }
+
+    .upload-section p {
+      margin-bottom: 1em;
+      color: #555;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5em;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    input[type="file"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 1em;
+      border: 1px solid #bdc3c7;
+      border-radius: 4px;
+      transition: border-color 0.3s;
+    }
+
+    input[type="file"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus {
+      border-color: #3498db;
+      outline: none;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      background-color: #3498db;
+      color: #fff;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      font-size: 1rem;
+    }
+
+    button:hover {
+      background-color: #2980b9;
+    }
+
+    .btn-clear {
+      background-color: #e74c3c;
+    }
+
+    .btn-clear:hover {
+      background-color: #c0392b;
+    }
+
+    .error {
+      color: #e74c3c;
+      font-weight: bold;
+      margin-top: 0.5em;
+    }
+
     .filters {
       display: flex;
-      gap: 1em;
-      margin-bottom: 1em;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 1.5em;
     }
-    .filters label {
-      font-weight: bold;
-      margin-right: 0.5em;
+
+    .filters > div {
+      flex: 1 1 200px;
     }
-    .filters select, .filters input {
-      min-width: 120px;
-    }
+
     .table-container {
       overflow-x: auto;
     }
+
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 900px; /* For wide columns */
-      text-align: center;
+      min-width: 900px;
+      text-align: left;
     }
+
     th, td {
-      border: 1px solid #ccc;
-      padding: 8px 12px;
+      border: 1px solid #bdc3c7;
+      padding: 12px 15px;
     }
+
     th {
-      background-color: #f7f7f7;
+      background-color: #3498db;
+      color: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
-    .hidden {
-      display: none;
+
+    tbody tr:nth-child(even) {
+      background-color: #f9f9f9;
     }
-    .error {
-      color: red;
-      font-weight: bold;
+
+    tbody tr:hover {
+      background-color: #f1f1f1;
     }
-    .btn-clear {
-      margin-left: 1em;
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .filters {
+        flex-direction: column;
+      }
+
+      table {
+        min-width: 600px;
+      }
     }
   </style>
   <script type="module">
@@ -83,14 +199,33 @@
       get(offersRef).then((snapshot) => {
         if (snapshot.exists()) {
           console.log("Data retrieved from Firebase:", snapshot.val());
-          window.offerData = snapshot.val();
-          rebuildFiltersAndTable(); // Update the UI with the retrieved data
+          // Convert the retrieved object to an array
+          const data = snapshot.val();
+          window.offerData = Array.isArray(data) ? data : Object.values(data);
+
+          // Cache data in localStorage
+          localStorage.setItem('offerData', JSON.stringify(window.offerData));
+
+          rebuildFiltersAndTable();
         } else {
           console.log("No data found in Firebase.");
           window.offerData = [];
+          localStorage.removeItem('offerData'); // Remove cached data if Firebase is empty
+          rebuildFiltersAndTable();
         }
       }).catch((error) => {
         console.error("Error connecting to Firebase:", error);
+        // Attempt to load data from localStorage if Firebase fails
+        const cachedData = localStorage.getItem('offerData');
+        if (cachedData) {
+          window.offerData = JSON.parse(cachedData);
+          rebuildFiltersAndTable();
+          showError("Loaded data from localStorage due to Firebase connection error.");
+        } else {
+          window.offerData = [];
+          rebuildFiltersAndTable();
+          showError("Error connecting to Firebase and no cached data available.");
+        }
       });
 
       // File upload event
@@ -102,16 +237,64 @@
       // "Clear Stored Offers" button
       document.getElementById('btnClearStorage').addEventListener('click', clearStorage);
 
-      // Filter events
-      document.getElementById('originFilter').addEventListener('change', updateTableWithFilters);
-      document.getElementById('cropYearFilter').addEventListener('change', updateTableWithFilters);
-      document.getElementById('qualityFilter').addEventListener('change', updateTableWithFilters);
-      document.getElementById('shipmentFilter').addEventListener('change', updateTableWithFilters);
+      // Filter elements
+      const filterElements = [
+        'originFilter',
+        'cropYearFilter',
+        'qualityFilter',
+        'shipmentFilter',
+        'countryFilter'
+      ];
 
-      // New Input for ICE and Country Selection
-      document.getElementById('iceInput').addEventListener('input', updateTableWithFilters);
-      document.getElementById('countryFilter').addEventListener('change', updateTableWithFilters);
+      // Add event listeners to filters
+      filterElements.forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+          updateFilterOptions();
+          updateTableWithFilters();
+          saveFilterSelections();
+        });
+      });
+
+      // ICE input
+      document.getElementById('iceInput').addEventListener('input', () => {
+        updateTableWithFilters();
+        saveFilterSelections();
+      });
+
+      // Load saved filter selections from localStorage
+      loadFilterSelections();
     });
+
+    /* -----------------------------------
+       Save Filter Selections to localStorage
+    ----------------------------------- */
+    function saveFilterSelections() {
+      const filterState = {
+        origin: document.getElementById('originFilter').value,
+        cropYear: document.getElementById('cropYearFilter').value,
+        quality: document.getElementById('qualityFilter').value,
+        shipment: document.getElementById('shipmentFilter').value,
+        country: document.getElementById('countryFilter').value,
+        ice: document.getElementById('iceInput').value
+      };
+      localStorage.setItem('filterState', JSON.stringify(filterState));
+    }
+
+    /* -----------------------------------
+       Load Filter Selections from localStorage
+    ----------------------------------- */
+    function loadFilterSelections() {
+      const savedFilters = localStorage.getItem('filterState');
+      if (savedFilters) {
+        const filterState = JSON.parse(savedFilters);
+        document.getElementById('originFilter').value = filterState.origin || "";
+        document.getElementById('cropYearFilter').value = filterState.cropYear || "";
+        document.getElementById('qualityFilter').value = filterState.quality || "";
+        document.getElementById('shipmentFilter').value = filterState.shipment || "";
+        document.getElementById('countryFilter').value = filterState.country || "India"; // Default to India
+        document.getElementById('iceInput').value = filterState.ice || "";
+      }
+    }
 
     /* -----------------------------------
        Filter the data & update table with price calculation
@@ -124,8 +307,9 @@
       const iceVal = parseFloat(document.getElementById('iceInput').value) || 0;
       const countryVal = document.getElementById('countryFilter').value;
 
-      // Filter the data
+      // Filter the data based on all selected criteria
       let filtered = window.offerData;
+
       if (originVal) {
         filtered = filtered.filter(row => row.Origin === originVal);
       }
@@ -203,13 +387,18 @@
     }
 
     /* -----------------------------------
-       Parse and store data in Firebase
+       Parse and store data in Firebase and localStorage
     ----------------------------------- */
     function parseAndStoreData(text) {
       try {
         const rows = parseTextToArray(text);
         // Validate column length (we expect 8 columns)
         const validRows = rows.filter(r => r.length >= 8);
+
+        if (validRows.length === 0) {
+          showError("No valid data found. Ensure your file has at least 8 columns per row.");
+          return;
+        }
 
         // Convert each row to an object
         const dataObjects = validRows.map(r => ({
@@ -230,12 +419,15 @@
         const offersRef = ref(database, 'offers');
         set(offersRef, dataObjects).then(() => {
           console.log("Data saved to Firebase successfully.");
+          // Cache data in localStorage
+          localStorage.setItem('offerData', JSON.stringify(window.offerData));
           rebuildFiltersAndTable();
+          hideError();
         }).catch((error) => {
           console.error("Error saving data to Firebase:", error);
+          showError("Error saving data to Firebase. Check console for details.");
         });
 
-        hideError();
       } catch (err) {
         console.error("Parsing error", err);
         showError("Error parsing data. Check the format or console for details.");
@@ -259,67 +451,114 @@
     }
 
     /* -----------------------------------
-       Clear localStorage
+       Clear Stored Offers
     ----------------------------------- */
     function clearStorage() {
-      // Clear data from Firebase if necessary
+      // Clear data from Firebase
       const offersRef = ref(database, 'offers');
-      set(offersRef, null); // Clear the offers node
-      window.offerData = [];
-      rebuildFiltersAndTable();
+      set(offersRef, null).then(() => {
+        console.log("Data cleared from Firebase.");
+        window.offerData = [];
+        localStorage.removeItem('offerData'); // Remove cached data
+        rebuildFiltersAndTable();
+        showError("All stored offers have been cleared.");
+      }).catch((error) => {
+        console.error("Error clearing data from Firebase:", error);
+        showError("Error clearing data from Firebase. Check console for details.");
+      });
     }
 
     /* -----------------------------------
        Build Filter Dropdowns & Table
     ----------------------------------- */
     function rebuildFiltersAndTable() {
-      buildFilterOptions();
+      updateFilterOptions();
       updateTableWithFilters();
     }
 
     /* -----------------------------------
-       Build the distinct filter options
+       Update Filter Options Based on Current Selections
     ----------------------------------- */
-    function buildFilterOptions() {
+    function updateFilterOptions() {
       const originFilter = document.getElementById('originFilter');
       const cropFilter = document.getElementById('cropYearFilter');
       const qualityFilter = document.getElementById('qualityFilter');
       const shipmentFilter = document.getElementById('shipmentFilter');
+      const countryFilter = document.getElementById('countryFilter');
 
-      [originFilter, cropFilter, qualityFilter, shipmentFilter].forEach(sel => {
-        sel.value = "";
-        while (sel.options.length > 1) {
-          sel.remove(1);
+      const selectedOrigin = originFilter.value;
+      const selectedCrop = cropFilter.value;
+      const selectedQuality = qualityFilter.value;
+      const selectedShipment = shipmentFilter.value;
+      const selectedCountry = countryFilter.value;
+
+      // Function to filter data based on current selections excluding the filter being updated
+      function getFilteredData(excludeFilter) {
+        let filtered = window.offerData;
+
+        if (selectedOrigin && excludeFilter !== 'origin') {
+          filtered = filtered.filter(row => row.Origin === selectedOrigin);
         }
-      });
+        if (selectedCrop && excludeFilter !== 'cropYear') {
+          filtered = filtered.filter(row => row.CropYear === selectedCrop);
+        }
+        if (selectedQuality && excludeFilter !== 'quality') {
+          filtered = filtered.filter(row => row.Quality === selectedQuality);
+        }
+        if (selectedShipment && excludeFilter !== 'shipment') {
+          filtered = filtered.filter(row => row.ShipmentMonth === selectedShipment);
+        }
 
-      if (!window.offerData || window.offerData.length === 0) return;
-
-      const origins = new Set();
-      const crops = new Set();
-      const qualities = new Set();
-      const shipments = new Set();
-
-      for (const row of window.offerData) {
-        if (row.Origin) origins.add(row.Origin);
-        if (row.CropYear) crops.add(row.CropYear);
-        if (row.Quality) qualities.add(row.Quality);
-        if (row.ShipmentMonth) shipments.add(row.ShipmentMonth);
+        return filtered;
       }
 
-      addOptionsToSelect(originFilter, Array.from(origins).sort());
-      addOptionsToSelect(cropFilter, Array.from(crops).sort());
-      addOptionsToSelect(qualityFilter, Array.from(qualities).sort());
-      addOptionsToSelect(shipmentFilter, Array.from(shipments).sort());
-    }
+      // Function to update a single filter's options
+      function updateSingleFilter(filterElem, filterType) {
+        const currentValue = filterElem.value;
+        const filteredData = getFilteredData(filterType);
+        const optionsSet = new Set();
 
-    function addOptionsToSelect(selectElem, values) {
-      for (const val of values) {
-        const option = document.createElement('option');
-        option.value = val;
-        option.textContent = val;
-        selectElem.appendChild(option);
+        filteredData.forEach(row => {
+          if (row[filterTypeMap[filterType]]) {
+            optionsSet.add(row[filterTypeMap[filterType]]);
+          }
+        });
+
+        // Clear existing options except "All"
+        while (filterElem.options.length > 1) {
+          filterElem.remove(1);
+        }
+
+        // Add new options
+        const sortedOptions = Array.from(optionsSet).sort();
+        sortedOptions.forEach(val => {
+          const option = document.createElement('option');
+          option.value = val;
+          option.textContent = val;
+          filterElem.appendChild(option);
+        });
+
+        // Preserve current selection if still valid
+        if (currentValue && optionsSet.has(currentValue)) {
+          filterElem.value = currentValue;
+        } else {
+          filterElem.value = "";
+        }
       }
+
+      // Mapping filter IDs to data keys
+      const filterTypeMap = {
+        'origin': 'Origin',
+        'cropYear': 'CropYear',
+        'quality': 'Quality',
+        'shipment': 'ShipmentMonth'
+      };
+
+      // Update each filter's options
+      updateSingleFilter(originFilter, 'origin');
+      updateSingleFilter(cropFilter, 'cropYear');
+      updateSingleFilter(qualityFilter, 'quality');
+      updateSingleFilter(shipmentFilter, 'shipment');
     }
 
     /* -----------------------------------
@@ -339,108 +578,110 @@
 </head>
 <body>
 
-<h1>Indian Cotton Basis Calculator (12-Month View)</h1>
+  <div class="container">
+    <h1>Daily Offer Basis Calculator</h1>
 
-<!-- ================================================ -->
-<!-- INTERNATIONAL OFFER FILE SECTION -->
-<!-- ================================================ -->
-<h2>International Offer File</h2>
+    <!-- ================================================ -->
+    <!-- INTERNATIONAL OFFER FILE SECTION -->
+    <!-- ================================================ -->
+    <h2>International Offer File</h2>
 
-<div class="upload-section">
-  <p>
-    Upload a CSV file (or tab-delimited file) <strong>OR</strong> paste data manually.  
-    The data will remain stored in your browser’s localStorage until you change it.
-  </p>
-  
-  <!-- Option 1: File Upload -->
-  <label for="offerFile"><strong>Upload File:</strong></label>
-  <input type="file" id="offerFile" accept=".csv, .txt" />
-  <br/><br/>
+    <div class="upload-section">
+      <p>
+        Upload a CSV file (or tab-delimited file) <strong>OR</strong> paste data manually.  
+        The data will remain stored in your browser’s localStorage and Firebase until you change it.
+      </p>
+      
+      <!-- Option 1: File Upload -->
+      <label for="offerFile"><strong>Upload File:</strong></label>
+      <input type="file" id="offerFile" accept=".csv, .txt" />
 
-  <!-- Option 2: Paste Data -->
-  <label for="offerText"><strong>Paste Data Here:</strong></label><br/>
-  <textarea id="offerText" rows="5" cols="80"
-            placeholder="For example, copy from Excel or a text file and paste here."></textarea>
-  <br/>
+      <!-- Option 2: Paste Data -->
+      <label for="offerText"><strong>Paste Data Here:</strong></label>
+      <textarea id="offerText" rows="5" 
+                placeholder="For example, copy from Excel or a text file and paste here."></textarea>
 
-  <button id="btnLoadData">Load/Replace Data</button>
-  <button id="btnClearStorage" class="btn-clear">Clear Stored Offers</button>
-  <p class="error" id="errorMessage" style="display:none;"></p>
-</div>
+      <div class="buttons">
+        <button id="btnLoadData">Load/Replace Data</button>
+        <button id="btnClearStorage" class="btn-clear">Clear Stored Offers</button>
+      </div>
+      <p class="error" id="errorMessage" style="display:none;"></p>
+    </div>
 
-<!-- ICE and Country Input -->
-<div class="filters">
-  <div>
-    <label for="iceInput">ICE</label>
-    <input type="number" id="iceInput" step="0.01" placeholder="Enter ICE value" />
+    <!-- ICE and Country Input -->
+    <div class="filters">
+      <div>
+        <label for="iceInput">ICE</label>
+        <input type="number" id="iceInput" step="0.01" placeholder="Enter ICE value" />
+      </div>
+
+      <div>
+        <label for="countryFilter">Country</label>
+        <select id="countryFilter">
+          <option value="India">India</option>
+          <option value="Bangladesh">Bangladesh</option>
+          <option value="Pakistan">Pakistan</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filters">
+      <div>
+        <label for="originFilter">Origin</label>
+        <select id="originFilter">
+          <option value="">All</option>
+          <!-- dynamic options will be added -->
+        </select>
+      </div>
+
+      <div>
+        <label for="cropYearFilter">Crop Year</label>
+        <select id="cropYearFilter">
+          <option value="">All</option>
+          <!-- dynamic options will be added -->
+        </select>
+      </div>
+
+      <div>
+        <label for="qualityFilter">Quality</label>
+        <select id="qualityFilter">
+          <option value="">All</option>
+          <!-- dynamic options will be added -->
+        </select>
+      </div>
+
+      <div>
+        <label for="shipmentFilter">Shipment Month</label>
+        <select id="shipmentFilter">
+          <option value="">All</option>
+          <!-- dynamic options will be added -->
+        </select>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table id="offerTable">
+        <thead>
+          <tr>
+            <!-- We expect these columns in the data -->
+            <th>Origin</th>
+            <th>Crop Year</th>
+            <th>Quality</th>
+            <th>Shipment Month</th>
+            <th>Basis India</th>
+            <th>Basis Bangladesh</th>
+            <th>Basis Pakistan</th>
+            <th>On Call Basis</th>
+            <th>Price</th> <!-- New column for Price -->
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Rows populated dynamically -->
+        </tbody>
+      </table>
+    </div>
   </div>
-
-  <div>
-    <label for="countryFilter">Country</label>
-    <select id="countryFilter">
-      <option value="India">India</option>
-      <option value="Bangladesh">Bangladesh</option>
-      <option value="Pakistan">Pakistan</option>
-    </select>
-  </div>
-</div>
-
-<!-- FILTERS -->
-<div class="filters">
-  <div>
-    <label for="originFilter">Origin</label>
-    <select id="originFilter">
-      <option value="">All</option>
-      <!-- dynamic options will be added -->
-    </select>
-  </div>
-
-  <div>
-    <label for="cropYearFilter">Crop Year</label>
-    <select id="cropYearFilter">
-      <option value="">All</option>
-      <!-- dynamic options will be added -->
-    </select>
-  </div>
-
-  <div>
-    <label for="qualityFilter">Quality</label>
-    <select id="qualityFilter">
-      <option value="">All</option>
-      <!-- dynamic options will be added -->
-    </select>
-  </div>
-
-  <div>
-    <label for="shipmentFilter">Shipment Month</label>
-    <select id="shipmentFilter">
-      <option value="">All</option>
-      <!-- dynamic options will be added -->
-    </select>
-  </div>
-</div>
-
-<div class="table-container">
-  <table id="offerTable">
-    <thead>
-      <tr>
-        <!-- We expect these columns in the data -->
-        <th>Origin</th>
-        <th>Crop Year</th>
-        <th>Quality</th>
-        <th>Shipment Month</th>
-        <th>Basis India</th>
-        <th>Basis Bangladesh</th>
-        <th>Basis Pakistan</th>
-        <th>On Call Basis</th>
-        <th>Price</th> <!-- New column for Price -->
-      </tr>
-    </thead>
-    <tbody>
-      <!-- Rows populated dynamically -->
-    </tbody>
-  </table>
-</div>
 
 </body>
 </html>
