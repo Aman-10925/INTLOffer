@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>International Offer File Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      max-width: 1200px;
+    }
+    h2 {
+      margin-top: 3em;
+      margin-bottom: 0.5em;
+    }
+    .upload-section {
+      border: 1px solid #ccc;
+      padding: 1em;
+      margin-bottom: 2em;
+    }
+    .filters {
+      display: flex;
+      gap: 1em;
+      margin-bottom: 1em;
+    }
+    .filters label {
+      font-weight: bold;
+      margin-right: 0.5em;
+    }
+    .filters select, .filters input {
+      min-width: 120px;
+    }
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 900px; /* For wide columns */
+      text-align: center;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px 12px;
+    }
+    th {
+      background-color: #f7f7f7;
+    }
+    .hidden {
+      display: none;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    .btn-clear {
+      margin-left: 1em;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Indian Cotton Basis Calculator (12-Month View)</h1>
+
+<!-- ================================================ -->
+<!-- INTERNATIONAL OFFER FILE SECTION -->
+<!-- ================================================ -->
+<h2>International Offer File</h2>
+
+<div class="upload-section">
+  <p>
+    Upload a CSV file (or tab-delimited file) <strong>OR</strong> paste data manually.  
+    The data will remain stored in your browser’s localStorage until you change it.
+  </p>
+  
+  <!-- Option 1: File Upload -->
+  <label for="offerFile"><strong>Upload File:</strong></label>
+  <input type="file" id="offerFile" accept=".csv, .txt" />
+  <br/><br/>
+
+  <!-- Option 2: Paste Data -->
+  <label for="offerText"><strong>Paste Data Here:</strong></label><br/>
+  <textarea id="offerText" rows="5" cols="80"
+            placeholder="For example, copy from Excel or a text file and paste here."></textarea>
+  <br/>
+
+  <button id="btnLoadData">Load/Replace Data</button>
+  <button id="btnClearStorage" class="btn-clear">Clear Stored Offers</button>
+  <p class="error" id="errorMessage" style="display:none;"></p>
+</div>
+
+<!-- ICE and Country Input -->
+<div class="filters">
+  <div>
+    <label for="iceInput">ICE</label>
+    <input type="number" id="iceInput" step="0.01" placeholder="Enter ICE value" />
+  </div>
+
+  <div>
+    <label for="countryFilter">Country</label>
+    <select id="countryFilter">
+      <option value="India">India</option>
+      <option value="Bangladesh">Bangladesh</option>
+      <option value="Pakistan">Pakistan</option>
+    </select>
+  </div>
+</div>
+
+<!-- FILTERS -->
+<div class="filters">
+  <div>
+    <label for="originFilter">Origin</label>
+    <select id="originFilter">
+      <option value="">All</option>
+      <!-- dynamic options will be added -->
+    </select>
+  </div>
+
+  <div>
+    <label for="cropYearFilter">Crop Year</label>
+    <select id="cropYearFilter">
+      <option value="">All</option>
+      <!-- dynamic options will be added -->
+    </select>
+  </div>
+
+  <div>
+    <label for="qualityFilter">Quality</label>
+    <select id="qualityFilter">
+      <option value="">All</option>
+      <!-- dynamic options will be added -->
+    </select>
+  </div>
+
+  <div>
+    <label for="shipmentFilter">Shipment Month</label>
+    <select id="shipmentFilter">
+      <option value="">All</option>
+      <!-- dynamic options will be added -->
+    </select>
+  </div>
+</div>
+
+<div class="table-container">
+  <table id="offerTable">
+    <thead>
+      <tr>
+        <!-- We expect these columns in the data -->
+        <th>Origin</th>
+        <th>Crop Year</th>
+        <th>Quality</th>
+        <th>Shipment Month</th>
+        <th>Basis India</th>
+        <th>Basis Bangladesh</th>
+        <th>Basis Pakistan</th>
+        <th>On Call Basis</th>
+        <th>Price</th> <!-- New column for Price -->
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows populated dynamically -->
+    </tbody>
+  </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Try to load previously saved data from localStorage
+  const existingData = localStorage.getItem('offerData');
+  if (existingData) {
+    try {
+      const parsedData = JSON.parse(existingData);
+      // Keep it globally so we can filter
+      window.offerData = parsedData;
+    } catch (err) {
+      console.error('Error parsing stored data:', err);
+      window.offerData = [];
+    }
+  } else {
+    window.offerData = [];
+  }
+
+  // Build table & filters if we have data
+  rebuildFiltersAndTable();
+
+  // File upload event
+  document.getElementById('offerFile').addEventListener('change', handleFileUpload);
+
+  // "Load/Replace Data" button (for the pasted text)
+  document.getElementById('btnLoadData').addEventListener('click', handlePasteData);
+
+  // "Clear Stored Offers" button
+  document.getElementById('btnClearStorage').addEventListener('click', clearStorage);
+
+  // Filter events
+  document.getElementById('originFilter').addEventListener('change', updateTableWithFilters);
+  document.getElementById('cropYearFilter').addEventListener('change', updateTableWithFilters);
+  document.getElementById('qualityFilter').addEventListener('change', updateTableWithFilters);
+  document.getElementById('shipmentFilter').addEventListener('change', updateTableWithFilters);
+
+  // New Input for ICE and Country Selection
+  document.getElementById('iceInput').addEventListener('input', updateTableWithFilters);
+  document.getElementById('countryFilter').addEventListener('change', updateTableWithFilters);
+});
+
+/* -----------------------------------
+   Filter the data & update table with price calculation
+----------------------------------- */
+function updateTableWithFilters() {
+  const originVal = document.getElementById('originFilter').value;
+  const cropVal = document.getElementById('cropYearFilter').value;
+  const qualityVal = document.getElementById('qualityFilter').value;
+  const shipmentVal = document.getElementById('shipmentFilter').value;
+  const iceVal = parseFloat(document.getElementById('iceInput').value) || 0;
+  const countryVal = document.getElementById('countryFilter').value;
+
+  // Filter the data
+  let filtered = window.offerData;
+  if (originVal) {
+    filtered = filtered.filter(row => row.Origin === originVal);
+  }
+  if (cropVal) {
+    filtered = filtered.filter(row => row.CropYear === cropVal);
+  }
+  if (qualityVal) {
+    filtered = filtered.filter(row => row.Quality === qualityVal);
+  }
+  if (shipmentVal) {
+    filtered = filtered.filter(row => row.ShipmentMonth === shipmentVal);
+  }
+
+  // Build table rows
+  const tbody = document.querySelector('#offerTable tbody');
+  tbody.innerHTML = ""; // clear old rows
+
+  for (const row of filtered) {
+    let basisField = 0;
+
+    // Select the correct basis value based on the selected country
+    if (countryVal === 'India') {
+      basisField = parseFloat(row.BasisIndia) || 0;
+    } else if (countryVal === 'Bangladesh') {
+      basisField = parseFloat(row.BasisBangladesh) || 0;
+    } else if (countryVal === 'Pakistan') {
+      basisField = parseFloat(row.BasisPakistan) || 0;
+    }
+
+    // Calculate price
+    const price = iceVal + (basisField / 100);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = 
+      `<td>${row.Origin}</td>
+       <td>${row.CropYear}</td>
+       <td>${row.Quality}</td>
+       <td>${row.ShipmentMonth}</td>
+       <td>${row.BasisIndia}</td>
+       <td>${row.BasisBangladesh}</td>
+       <td>${row.BasisPakistan}</td>
+       <td>${row.OnCallBasis}</td>
+       <td>${price.toFixed(2)}</td>`; // Show Price
+    tbody.appendChild(tr);
+  }
+}
+
+/* -----------------------------------
+   Handle File Upload 
+----------------------------------- */
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const text = evt.target.result;
+    parseAndStoreData(text);
+  };
+  reader.readAsText(file);
+}
+
+/* -----------------------------------
+   Handle Pasted Data
+----------------------------------- */
+function handlePasteData() {
+  const text = document.getElementById('offerText').value.trim();
+  if (!text) {
+    showError("Please paste some data or upload a file.");
+    return;
+  }
+  parseAndStoreData(text);
+  // Clear the textarea
+  document.getElementById('offerText').value = "";
+}
+
+/* -----------------------------------
+   Parse and store data in localStorage
+----------------------------------- */
+function parseAndStoreData(text) {
+  try {
+    const rows = parseTextToArray(text);
+    // Validate column length (we expect 8 columns)
+    const validRows = rows.filter(r => r.length >= 8);
+
+    // Convert each row to an object
+    // Col mapping:
+    //  0: Origin
+    //  1: CropYear
+    //  2: Quality
+    //  3: ShipmentMonth
+    //  4: BasisIndia
+    //  5: BasisBangladesh
+    //  6: BasisPakistan
+    //  7: OnCallBasis
+    const dataObjects = validRows.map(r => ({
+      Origin: r[0],
+      CropYear: r[1],
+      Quality: r[2],
+      ShipmentMonth: r[3],
+      BasisIndia: r[4],
+      BasisBangladesh: r[5],
+      BasisPakistan: r[6],
+      OnCallBasis: r[7]
+    }));
+
+    // Overwrite the global data
+    window.offerData = dataObjects;
+    // Store in localStorage
+    localStorage.setItem('offerData', JSON.stringify(dataObjects));
+
+    hideError();
+    rebuildFiltersAndTable();
+  } catch (err) {
+    console.error("Parsing error", err);
+    showError("Error parsing data. Check the format or console for details.");
+  }
+}
+
+/* -----------------------------------
+   Basic CSV/Tab parse
+----------------------------------- */
+function parseTextToArray(text) {
+  // Split by newlines
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  // For each line, split by comma or tab
+  return lines.map(line => {
+    let columns = line.split(",");
+    if (columns.length === 1) {
+      columns = line.split(/\t/);
+    }
+    return columns.map(c => c.trim());
+  });
+}
+
+/* -----------------------------------
+   Clear localStorage
+----------------------------------- */
+function clearStorage() {
+  localStorage.removeItem('offerData');
+  window.offerData = [];
+  rebuildFiltersAndTable();
+}
+
+/* -----------------------------------
+   Build Filter Dropdowns & Table
+----------------------------------- */
+function rebuildFiltersAndTable() {
+  buildFilterOptions();
+  updateTableWithFilters();
+}
+
+/* -----------------------------------
+   Build the distinct filter options
+----------------------------------- */
+function buildFilterOptions() {
+  const originFilter = document.getElementById('originFilter');
+  const cropFilter = document.getElementById('cropYearFilter');
+  const qualityFilter = document.getElementById('qualityFilter');
+  const shipmentFilter = document.getElementById('shipmentFilter');
+
+  [originFilter, cropFilter, qualityFilter, shipmentFilter].forEach(sel => {
+    sel.value = "";
+    while (sel.options.length > 1) {
+      sel.remove(1);
+    }
+  });
+
+  if (!window.offerData || window.offerData.length === 0) return;
+
+  const origins = new Set();
+  const crops = new Set();
+  const qualities = new Set();
+  const shipments = new Set();
+
+  for (const row of window.offerData) {
+    if (row.Origin) origins.add(row.Origin);
+    if (row.CropYear) crops.add(row.CropYear);
+    if (row.Quality) qualities.add(row.Quality);
+    if (row.ShipmentMonth) shipments.add(row.ShipmentMonth);
+  }
+
+  addOptionsToSelect(originFilter, Array.from(origins).sort());
+  addOptionsToSelect(cropFilter, Array.from(crops).sort());
+  addOptionsToSelect(qualityFilter, Array.from(qualities).sort());
+  addOptionsToSelect(shipmentFilter, Array.from(shipments).sort());
+}
+
+function addOptionsToSelect(selectElem, values) {
+  for (const val of values) {
+    const option = document.createElement('option');
+    option.value = val;
+    option.textContent = val;
+    selectElem.appendChild(option);
+  }
+}
+
+/* -----------------------------------
+   Error handling
+----------------------------------- */
+function showError(msg) {
+  const errEl = document.getElementById('errorMessage');
+  errEl.textContent = msg;
+  errEl.style.display = 'block';
+}
+function hideError() {
+  const errEl = document.getElementById('errorMessage');
+  errEl.textContent = "";
+  errEl.style.display = 'none';
+}
+</script>
+</body>
+</html>
