@@ -57,8 +57,285 @@
       margin-left: 1em;
     }
   </style>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBUCCLiP43hOYj2Gw5GWXmfMyKfCd_02Iw",
+      authDomain: "offer-sheet-13091.firebaseapp.com",
+      projectId: "offer-sheet-13091",
+      storageBucket: "offer-sheet-13091.firebasestorage.app",
+      messagingSenderId: "279081362062",
+      appId: "1:279081362062:web:e207eec6a33f841af01fdf",
+      measurementId: "G-VWRNXT5D31"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Load data from Firebase
+      const offersRef = ref(database, 'offers');
+      get(offersRef).then((snapshot) => {
+        if (snapshot.exists()) {
+          console.log("Data retrieved from Firebase:", snapshot.val());
+          window.offerData = snapshot.val();
+          rebuildFiltersAndTable(); // Update the UI with the retrieved data
+        } else {
+          console.log("No data found in Firebase.");
+          window.offerData = [];
+        }
+      }).catch((error) => {
+        console.error("Error connecting to Firebase:", error);
+      });
+
+      // File upload event
+      document.getElementById('offerFile').addEventListener('change', handleFileUpload);
+
+      // "Load/Replace Data" button (for the pasted text)
+      document.getElementById('btnLoadData').addEventListener('click', handlePasteData);
+
+      // "Clear Stored Offers" button
+      document.getElementById('btnClearStorage').addEventListener('click', clearStorage);
+
+      // Filter events
+      document.getElementById('originFilter').addEventListener('change', updateTableWithFilters);
+      document.getElementById('cropYearFilter').addEventListener('change', updateTableWithFilters);
+      document.getElementById('qualityFilter').addEventListener('change', updateTableWithFilters);
+      document.getElementById('shipmentFilter').addEventListener('change', updateTableWithFilters);
+
+      // New Input for ICE and Country Selection
+      document.getElementById('iceInput').addEventListener('input', updateTableWithFilters);
+      document.getElementById('countryFilter').addEventListener('change', updateTableWithFilters);
+    });
+
+    /* -----------------------------------
+       Filter the data & update table with price calculation
+    ----------------------------------- */
+    function updateTableWithFilters() {
+      const originVal = document.getElementById('originFilter').value;
+      const cropVal = document.getElementById('cropYearFilter').value;
+      const qualityVal = document.getElementById('qualityFilter').value;
+      const shipmentVal = document.getElementById('shipmentFilter').value;
+      const iceVal = parseFloat(document.getElementById('iceInput').value) || 0;
+      const countryVal = document.getElementById('countryFilter').value;
+
+      // Filter the data
+      let filtered = window.offerData;
+      if (originVal) {
+        filtered = filtered.filter(row => row.Origin === originVal);
+      }
+      if (cropVal) {
+        filtered = filtered.filter(row => row.CropYear === cropVal);
+      }
+      if (qualityVal) {
+        filtered = filtered.filter(row => row.Quality === qualityVal);
+      }
+      if (shipmentVal) {
+        filtered = filtered.filter(row => row.ShipmentMonth === shipmentVal);
+      }
+
+      // Build table rows
+      const tbody = document.querySelector('#offerTable tbody');
+      tbody.innerHTML = ""; // clear old rows
+
+      for (const row of filtered) {
+        let basisField = 0;
+
+        // Select the correct basis value based on the selected country
+        if (countryVal === 'India') {
+          basisField = parseFloat(row.BasisIndia) || 0;
+        } else if (countryVal === 'Bangladesh') {
+          basisField = parseFloat(row.BasisBangladesh) || 0;
+        } else if (countryVal === 'Pakistan') {
+          basisField = parseFloat(row.BasisPakistan) || 0;
+        }
+
+        // Calculate price
+        const price = iceVal + (basisField / 100);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = 
+          `<td>${row.Origin}</td>
+           <td>${row.CropYear}</td>
+           <td>${row.Quality}</td>
+           <td>${row.ShipmentMonth}</td>
+           <td>${row.BasisIndia}</td>
+           <td>${row.BasisBangladesh}</td>
+           <td>${row.BasisPakistan}</td>
+           <td>${row.OnCallBasis}</td>
+           <td>${price.toFixed(2)}</td>`; // Show Price
+        tbody.appendChild(tr);
+      }
+    }
+
+    /* -----------------------------------
+       Handle File Upload 
+    ----------------------------------- */
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const text = evt.target.result;
+        parseAndStoreData(text);
+      };
+      reader.readAsText(file);
+    }
+
+    /* -----------------------------------
+       Handle Pasted Data
+    ----------------------------------- */
+    function handlePasteData() {
+      const text = document.getElementById('offerText').value.trim();
+      if (!text) {
+        showError("Please paste some data or upload a file.");
+        return;
+      }
+      parseAndStoreData(text);
+      // Clear the textarea
+      document.getElementById('offerText').value = "";
+    }
+
+    /* -----------------------------------
+       Parse and store data in Firebase
+    ----------------------------------- */
+    function parseAndStoreData(text) {
+      try {
+        const rows = parseTextToArray(text);
+        // Validate column length (we expect 8 columns)
+        const validRows = rows.filter(r => r.length >= 8);
+
+        // Convert each row to an object
+        const dataObjects = validRows.map(r => ({
+          Origin: r[0],
+          CropYear: r[1],
+          Quality: r[2],
+          ShipmentMonth: r[3],
+          BasisIndia: r[4],
+          BasisBangladesh: r[5],
+          BasisPakistan: r[6],
+          OnCallBasis: r[7]
+        }));
+
+        // Overwrite the global data
+        window.offerData = dataObjects;
+
+        // Store in Firebase
+        const offersRef = ref(database, 'offers');
+        set(offersRef, dataObjects).then(() => {
+          console.log("Data saved to Firebase successfully.");
+          rebuildFiltersAndTable();
+        }).catch((error) => {
+          console.error("Error saving data to Firebase:", error);
+        });
+
+        hideError();
+      } catch (err) {
+        console.error("Parsing error", err);
+        showError("Error parsing data. Check the format or console for details.");
+      }
+    }
+
+    /* -----------------------------------
+       Basic CSV/Tab parse
+    ----------------------------------- */
+    function parseTextToArray(text) {
+      // Split by newlines
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      // For each line, split by comma or tab
+      return lines.map(line => {
+        let columns = line.split(",");
+        if (columns.length === 1) {
+          columns = line.split(/\t/);
+        }
+        return columns.map(c => c.trim());
+      });
+    }
+
+    /* -----------------------------------
+       Clear localStorage
+    ----------------------------------- */
+    function clearStorage() {
+      // Clear data from Firebase if necessary
+      const offersRef = ref(database, 'offers');
+      set(offersRef, null); // Clear the offers node
+      window.offerData = [];
+      rebuildFiltersAndTable();
+    }
+
+    /* -----------------------------------
+       Build Filter Dropdowns & Table
+    ----------------------------------- */
+    function rebuildFiltersAndTable() {
+      buildFilterOptions();
+      updateTableWithFilters();
+    }
+
+    /* -----------------------------------
+       Build the distinct filter options
+    ----------------------------------- */
+    function buildFilterOptions() {
+      const originFilter = document.getElementById('originFilter');
+      const cropFilter = document.getElementById('cropYearFilter');
+      const qualityFilter = document.getElementById('qualityFilter');
+      const shipmentFilter = document.getElementById('shipmentFilter');
+
+      [originFilter, cropFilter, qualityFilter, shipmentFilter].forEach(sel => {
+        sel.value = "";
+        while (sel.options.length > 1) {
+          sel.remove(1);
+        }
+      });
+
+      if (!window.offerData || window.offerData.length === 0) return;
+
+      const origins = new Set();
+      const crops = new Set();
+      const qualities = new Set();
+      const shipments = new Set();
+
+      for (const row of window.offerData) {
+        if (row.Origin) origins.add(row.Origin);
+        if (row.CropYear) crops.add(row.CropYear);
+        if (row.Quality) qualities.add(row.Quality);
+        if (row.ShipmentMonth) shipments.add(row.ShipmentMonth);
+      }
+
+      addOptionsToSelect(originFilter, Array.from(origins).sort());
+      addOptionsToSelect(cropFilter, Array.from(crops).sort());
+      addOptionsToSelect(qualityFilter, Array.from(qualities).sort());
+      addOptionsToSelect(shipmentFilter, Array.from(shipments).sort());
+    }
+
+    function addOptionsToSelect(selectElem, values) {
+      for (const val of values) {
+        const option = document.createElement('option');
+        option.value = val;
+        option.textContent = val;
+        selectElem.appendChild(option);
+      }
+    }
+
+    /* -----------------------------------
+       Error handling
+    ----------------------------------- */
+    function showError(msg) {
+      const errEl = document.getElementById('errorMessage');
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+    function hideError() {
+      const errEl = document.getElementById('errorMessage');
+      errEl.textContent = "";
+      errEl.style.display = 'none';
+    }
+  </script>
 </head>
 <body>
 
@@ -165,265 +442,5 @@
   </table>
 </div>
 
-<script>
-const firebaseConfig = {  
-  apiKey: "AIzaSyBUCCLiP43hOYj2Gw5GWXmfMyKfCd_02Iw",  
-  authDomain: "offer-sheet-13091.firebaseapp.com",  
-  projectId: "offer-sheet-13091",  
-  storageBucket: "offer-sheet-13091.firebasestorage.app",  
-  messagingSenderId: "279081362062",  
-  appId: "1:279081362062:web:e207eec6a33f841af01fdf",  
-  measurementId: "G-VWRNXT5D31"
-};
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-
-document.addEventListener('DOMContentLoaded', () => {
-  // Load data from Firebase
-  database.ref('offers').once('value').then(snapshot => {
-    if (snapshot.exists()) {
-      window.offerData = snapshot.val();
-      rebuildFiltersAndTable();
-    } else {
-      window.offerData = [];
-    }
-  });
-
-  // File upload event
-  document.getElementById('offerFile').addEventListener('change', handleFileUpload);
-
-  // "Load/Replace Data" button (for the pasted text)
-  document.getElementById('btnLoadData').addEventListener('click', handlePasteData);
-
-  // "Clear Stored Offers" button
-  document.getElementById('btnClearStorage').addEventListener('click', clearStorage);
-
-  // Filter events
-  document.getElementById('originFilter').addEventListener('change', updateTableWithFilters);
-  document.getElementById('cropYearFilter').addEventListener('change', updateTableWithFilters);
-  document.getElementById('qualityFilter').addEventListener('change', updateTableWithFilters);
-  document.getElementById('shipmentFilter').addEventListener('change', updateTableWithFilters);
-
-  // New Input for ICE and Country Selection
-  document.getElementById('iceInput').addEventListener('input', updateTableWithFilters);
-  document.getElementById('countryFilter').addEventListener('change', updateTableWithFilters);
-});
-
-/* -----------------------------------
-   Filter the data & update table with price calculation
------------------------------------ */
-function updateTableWithFilters() {
-  const originVal = document.getElementById('originFilter').value;
-  const cropVal = document.getElementById('cropYearFilter').value;
-  const qualityVal = document.getElementById('qualityFilter').value;
-  const shipmentVal = document.getElementById('shipmentFilter').value;
-  const iceVal = parseFloat(document.getElementById('iceInput').value) || 0;
-  const countryVal = document.getElementById('countryFilter').value;
-
-  // Filter the data
-  let filtered = window.offerData;
-  if (originVal) {
-    filtered = filtered.filter(row => row.Origin === originVal);
-  }
-  if (cropVal) {
-    filtered = filtered.filter(row => row.CropYear === cropVal);
-  }
-  if (qualityVal) {
-    filtered = filtered.filter(row => row.Quality === qualityVal);
-  }
-  if (shipmentVal) {
-    filtered = filtered.filter(row => row.ShipmentMonth === shipmentVal);
-  }
-
-  // Build table rows
-  const tbody = document.querySelector('#offerTable tbody');
-  tbody.innerHTML = ""; // clear old rows
-
-  for (const row of filtered) {
-    let basisField = 0;
-
-    // Select the correct basis value based on the selected country
-    if (countryVal === 'India') {
-      basisField = parseFloat(row.BasisIndia) || 0;
-    } else if (countryVal === 'Bangladesh') {
-      basisField = parseFloat(row.BasisBangladesh) || 0;
-    } else if (countryVal === 'Pakistan') {
-      basisField = parseFloat(row.BasisPakistan) || 0;
-    }
-
-    // Calculate price
-    const price = iceVal + (basisField / 100);
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = 
-      `<td>${row.Origin}</td>
-       <td>${row.CropYear}</td>
-       <td>${row.Quality}</td>
-       <td>${row.ShipmentMonth}</td>
-       <td>${row.BasisIndia}</td>
-       <td>${row.BasisBangladesh}</td>
-       <td>${row.BasisPakistan}</td>
-       <td>${row.OnCallBasis}</td>
-       <td>${price.toFixed(2)}</td>`; // Show Price
-    tbody.appendChild(tr);
-  }
-}
-
-/* -----------------------------------
-   Handle File Upload 
------------------------------------ */
-function handleFileUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    const text = evt.target.result;
-    parseAndStoreData(text);
-  };
-  reader.readAsText(file);
-}
-
-/* -----------------------------------
-   Handle Pasted Data
------------------------------------ */
-function handlePasteData() {
-  const text = document.getElementById('offerText').value.trim();
-  console.log("Pasting data:", text); // Log the pasted data
-  if (!text) {
-    showError("Please paste some data or upload a file.");
-    return;
-  }
-  parseAndStoreData(text);
-  // Clear the textarea
-  document.getElementById('offerText').value = "";
-}
-
-/* -----------------------------------
-   Parse and store data in Firebase
------------------------------------ */
-function parseAndStoreData(text) {
-  try {
-    const rows = parseTextToArray(text);
-    const validRows = rows.filter(r => r.length >= 8);
-
-    const dataObjects = validRows.map(r => ({
-      Origin: r[0],
-      CropYear: r[1],
-      Quality: r[2],
-      ShipmentMonth: r[3],
-      BasisIndia: r[4],
-      BasisBangladesh: r[5],
-      BasisPakistan: r[6],
-      OnCallBasis: r[7]
-    }));
-
-    // Overwrite the global data
-    window.offerData = dataObjects;
-    // Store in Firebase
-    database.ref('offers').set(dataObjects);
-
-    hideError();
-    rebuildFiltersAndTable();
-  } catch (err) {
-    console.error("Parsing error", err);
-    showError("Error parsing data. Check the format or console for details.");
-  }
-}
-
-/* -----------------------------------
-   Basic CSV/Tab parse
------------------------------------ */
-function parseTextToArray(text) {
-  // Split by newlines
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  // For each line, split by comma or tab
-  return lines.map(line => {
-    let columns = line.split(",");
-    if (columns.length === 1) {
-      columns = line.split(/\t/);
-    }
-    return columns.map(c => c.trim());
-  });
-}
-
-/* -----------------------------------
-   Clear localStorage
------------------------------------ */
-function clearStorage() {
-  database.ref('offers').remove(); // Clear data from Firebase
-  window.offerData = [];
-  rebuildFiltersAndTable();
-}
-
-/* -----------------------------------
-   Build Filter Dropdowns & Table
------------------------------------ */
-function rebuildFiltersAndTable() {
-  buildFilterOptions();
-  updateTableWithFilters();
-}
-
-/* -----------------------------------
-   Build the distinct filter options
------------------------------------ */
-function buildFilterOptions() {
-  const originFilter = document.getElementById('originFilter');
-  const cropFilter = document.getElementById('cropYearFilter');
-  const qualityFilter = document.getElementById('qualityFilter');
-  const shipmentFilter = document.getElementById('shipmentFilter');
-
-  [originFilter, cropFilter, qualityFilter, shipmentFilter].forEach(sel => {
-    sel.value = "";
-    while (sel.options.length > 1) {
-      sel.remove(1);
-    }
-  });
-
-  if (!window.offerData || window.offerData.length === 0) return;
-
-  const origins = new Set();
-  const crops = new Set();
-  const qualities = new Set();
-  const shipments = new Set();
-
-  for (const row of window.offerData) {
-    if (row.Origin) origins.add(row.Origin);
-    if (row.CropYear) crops.add(row.CropYear);
-    if (row.Quality) qualities.add(row.Quality);
-    if (row.ShipmentMonth) shipments.add(row.ShipmentMonth);
-  }
-
-  addOptionsToSelect(originFilter, Array.from(origins).sort());
-  addOptionsToSelect(cropFilter, Array.from(crops).sort());
-  addOptionsToSelect(qualityFilter, Array.from(qualities).sort());
-  addOptionsToSelect(shipmentFilter, Array.from(shipments).sort());
-}
-
-function addOptionsToSelect(selectElem, values) {
-  for (const val of values) {
-    const option = document.createElement('option');
-    option.value = val;
-    option.textContent = val;
-    selectElem.appendChild(option);
-  }
-}
-
-/* -----------------------------------
-   Error handling
------------------------------------ */
-function showError(msg) {
-  const errEl = document.getElementById('errorMessage');
-  errEl.textContent = msg;
-  errEl.style.display = 'block';
-}
-function hideError() {
-  const errEl = document.getElementById('errorMessage');
-  errEl.textContent = "";
-  errEl.style.display = 'none';
-}
-</script>
 </body>
 </html>
