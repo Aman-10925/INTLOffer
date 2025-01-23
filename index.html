@@ -57,6 +57,8 @@
       margin-left: 1em;
     }
   </style>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
 </head>
 <body>
 
@@ -164,24 +166,30 @@
 </div>
 
 <script>
+const firebaseConfig = {  
+  apiKey: "AIzaSyBUCCLiP43hOYj2Gw5GWXmfMyKfCd_02Iw",  
+  authDomain: "offer-sheet-13091.firebaseapp.com",  
+  projectId: "offer-sheet-13091",  
+  storageBucket: "offer-sheet-13091.firebasestorage.app",  
+  messagingSenderId: "279081362062",  
+  appId: "1:279081362062:web:e207eec6a33f841af01fdf",  
+  measurementId: "G-VWRNXT5D31"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
 document.addEventListener('DOMContentLoaded', () => {
-  // Try to load previously saved data from localStorage
-  const existingData = localStorage.getItem('offerData');
-  if (existingData) {
-    try {
-      const parsedData = JSON.parse(existingData);
-      // Keep it globally so we can filter
-      window.offerData = parsedData;
-    } catch (err) {
-      console.error('Error parsing stored data:', err);
+  // Load data from Firebase
+  database.ref('offers').once('value').then(snapshot => {
+    if (snapshot.exists()) {
+      window.offerData = snapshot.val();
+      rebuildFiltersAndTable();
+    } else {
       window.offerData = [];
     }
-  } else {
-    window.offerData = [];
-  }
-
-  // Build table & filters if we have data
-  rebuildFiltersAndTable();
+  });
 
   // File upload event
   document.getElementById('offerFile').addEventListener('change', handleFileUpload);
@@ -283,6 +291,7 @@ function handleFileUpload(e) {
 ----------------------------------- */
 function handlePasteData() {
   const text = document.getElementById('offerText').value.trim();
+  console.log("Pasting data:", text); // Log the pasted data
   if (!text) {
     showError("Please paste some data or upload a file.");
     return;
@@ -293,24 +302,13 @@ function handlePasteData() {
 }
 
 /* -----------------------------------
-   Parse and store data in localStorage
+   Parse and store data in Firebase
 ----------------------------------- */
 function parseAndStoreData(text) {
   try {
     const rows = parseTextToArray(text);
-    // Validate column length (we expect 8 columns)
     const validRows = rows.filter(r => r.length >= 8);
 
-    // Convert each row to an object
-    // Col mapping:
-    //  0: Origin
-    //  1: CropYear
-    //  2: Quality
-    //  3: ShipmentMonth
-    //  4: BasisIndia
-    //  5: BasisBangladesh
-    //  6: BasisPakistan
-    //  7: OnCallBasis
     const dataObjects = validRows.map(r => ({
       Origin: r[0],
       CropYear: r[1],
@@ -324,8 +322,8 @@ function parseAndStoreData(text) {
 
     // Overwrite the global data
     window.offerData = dataObjects;
-    // Store in localStorage
-    localStorage.setItem('offerData', JSON.stringify(dataObjects));
+    // Store in Firebase
+    database.ref('offers').set(dataObjects);
 
     hideError();
     rebuildFiltersAndTable();
@@ -355,7 +353,7 @@ function parseTextToArray(text) {
    Clear localStorage
 ----------------------------------- */
 function clearStorage() {
-  localStorage.removeItem('offerData');
+  database.ref('offers').remove(); // Clear data from Firebase
   window.offerData = [];
   rebuildFiltersAndTable();
 }
