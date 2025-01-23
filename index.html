@@ -41,11 +41,40 @@
       padding-bottom: 0.3em;
     }
 
-    .upload-section {
+    /* Collapsible Section Styles */
+    .collapsible {
+      background-color: #3498db;
+      color: white;
+      cursor: pointer;
+      padding: 14px 20px;
+      width: 100%;
+      border: none;
+      text-align: left;
+      outline: none;
+      font-size: 1.1rem;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      transition: background-color 0.3s;
+    }
+
+    .collapsible:hover {
+      background-color: #2980b9;
+    }
+
+    .collapsible.active {
+      background-color: #2980b9;
+    }
+
+    .content {
+      padding: 0 20px;
+      display: none;
+      overflow: hidden;
       background-color: #ecf0f1;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 2em;
+      border-radius: 0 0 8px 8px;
+    }
+
+    .upload-section {
+      padding: 20px 0;
     }
 
     .upload-section p {
@@ -70,6 +99,7 @@
       border: 1px solid #bdc3c7;
       border-radius: 4px;
       transition: border-color 0.3s;
+      font-size: 1rem; /* Ensure consistent font size */
     }
 
     input[type="file"]:focus,
@@ -128,6 +158,14 @@
 
     .filters > div {
       flex: 1 1 200px;
+    }
+
+    /* Increased ICE Input Box and Country Filter Size */
+    #iceInput,
+    #countryFilter {
+      height: 45px; /* Match ICE input height */
+      font-size: 1rem; /* Match ICE input font size */
+      padding: 8px 10px; /* Ensure padding consistency */
     }
 
     .table-container {
@@ -194,39 +232,22 @@
     const database = getDatabase(app);
 
     document.addEventListener('DOMContentLoaded', () => {
-      // Load data from Firebase
-      const offersRef = ref(database, 'offers');
-      get(offersRef).then((snapshot) => {
-        if (snapshot.exists()) {
-          console.log("Data retrieved from Firebase:", snapshot.val());
-          // Convert the retrieved object to an array
-          const data = snapshot.val();
-          window.offerData = Array.isArray(data) ? data : Object.values(data);
+      // Collapsible Upload/Paste Data Section Initialization
+      const collapsible = document.getElementById('collapsibleUpload');
+      const content = document.getElementById('uploadContent');
 
-          // Cache data in localStorage
-          localStorage.setItem('offerData', JSON.stringify(window.offerData));
+      collapsible.addEventListener('click', function() {
+        this.classList.toggle('active');
 
-          rebuildFiltersAndTable();
+        if (content.style.display === "block") {
+          content.style.display = "none";
         } else {
-          console.log("No data found in Firebase.");
-          window.offerData = [];
-          localStorage.removeItem('offerData'); // Remove cached data if Firebase is empty
-          rebuildFiltersAndTable();
-        }
-      }).catch((error) => {
-        console.error("Error connecting to Firebase:", error);
-        // Attempt to load data from localStorage if Firebase fails
-        const cachedData = localStorage.getItem('offerData');
-        if (cachedData) {
-          window.offerData = JSON.parse(cachedData);
-          rebuildFiltersAndTable();
-          showError("Loaded data from localStorage due to Firebase connection error.");
-        } else {
-          window.offerData = [];
-          rebuildFiltersAndTable();
-          showError("Error connecting to Firebase and no cached data available.");
+          content.style.display = "block";
         }
       });
+
+      // Load data from Firebase or localStorage
+      loadData();
 
       // File upload event
       document.getElementById('offerFile').addEventListener('change', handleFileUpload);
@@ -260,10 +281,54 @@
         updateTableWithFilters();
         saveFilterSelections();
       });
-
-      // Load saved filter selections from localStorage
-      loadFilterSelections();
     });
+
+    /* -----------------------------------
+       Load Data from Firebase or localStorage
+    ----------------------------------- */
+    function loadData() {
+      const offersRef = ref(database, 'offers');
+      get(offersRef).then((snapshot) => {
+        if (snapshot.exists()) {
+          console.log("Data retrieved from Firebase:", snapshot.val());
+          // Convert the retrieved object to an array
+          const data = snapshot.val();
+          window.offerData = Array.isArray(data) ? data : Object.values(data);
+
+          // Cache data in localStorage
+          localStorage.setItem('offerData', JSON.stringify(window.offerData));
+
+          // **Load filter selections BEFORE rebuilding filters and table**
+          loadFilterSelections();
+
+          rebuildFiltersAndTable();
+        } else {
+          console.log("No data found in Firebase.");
+          window.offerData = [];
+          localStorage.removeItem('offerData'); // Remove cached data if Firebase is empty
+          
+          // **Load filter selections even if there's no data**
+          loadFilterSelections();
+
+          rebuildFiltersAndTable();
+        }
+      }).catch((error) => {
+        console.error("Error connecting to Firebase:", error);
+        // Attempt to load data from localStorage if Firebase fails
+        const cachedData = localStorage.getItem('offerData');
+        if (cachedData) {
+          window.offerData = JSON.parse(cachedData);
+          loadFilterSelections();
+          rebuildFiltersAndTable();
+          showError("Loaded data from localStorage due to Firebase connection error.");
+        } else {
+          window.offerData = [];
+          loadFilterSelections();
+          rebuildFiltersAndTable();
+          showError("Error connecting to Firebase and no cached data available.");
+        }
+      });
+    }
 
     /* -----------------------------------
        Save Filter Selections to localStorage
@@ -348,13 +413,16 @@
            <td>${row.CropYear}</td>
            <td>${row.Quality}</td>
            <td>${row.ShipmentMonth}</td>
-           <td>${row.BasisIndia}</td>
-           <td>${row.BasisBangladesh}</td>
-           <td>${row.BasisPakistan}</td>
+           <td class="basisIndia">${row.BasisIndia}</td>
+           <td class="basisBangladesh">${row.BasisBangladesh}</td>
+           <td class="basisPakistan">${row.BasisPakistan}</td>
            <td>${row.OnCallBasis}</td>
            <td>${price.toFixed(2)}</td>`; // Show Price
         tbody.appendChild(tr);
       }
+
+      // Update Basis Columns Visibility
+      updateBasisColumns();
     }
 
     /* -----------------------------------
@@ -460,6 +528,7 @@
         console.log("Data cleared from Firebase.");
         window.offerData = [];
         localStorage.removeItem('offerData'); // Remove cached data
+        localStorage.removeItem('filterState'); // Remove saved filters
         rebuildFiltersAndTable();
         showError("All stored offers have been cleared.");
       }).catch((error) => {
@@ -562,6 +631,68 @@
     }
 
     /* -----------------------------------
+       Update Basis Columns Visibility Based on Country Selection
+    ----------------------------------- */
+    function updateBasisColumns() {
+      const country = document.getElementById('countryFilter').value;
+      const basisIndiaCols = document.querySelectorAll('.basisIndia');
+      const basisBangladeshCols = document.querySelectorAll('.basisBangladesh');
+      const basisPakistanCols = document.querySelectorAll('.basisPakistan');
+
+      // Hide all basis columns initially
+      basisIndiaCols.forEach(col => col.style.display = 'none');
+      basisBangladeshCols.forEach(col => col.style.display = 'none');
+      basisPakistanCols.forEach(col => col.style.display = 'none');
+
+      // Hide the entire column headers initially
+      const ths = document.querySelectorAll('#offerTable th');
+      ths.forEach(th => {
+        if (th.classList.contains('basisIndia') || th.classList.contains('basisBangladesh') || th.classList.contains('basisPakistan')) {
+          th.style.display = 'none';
+        }
+      });
+
+      // Show the relevant basis column based on the selected country
+      if (country === 'India') {
+        basisIndiaCols.forEach(col => col.style.display = '');
+        // Show the header
+        ths.forEach(th => {
+          if (th.classList.contains('basisIndia')) {
+            th.style.display = '';
+          }
+        });
+      } else if (country === 'Bangladesh') {
+        basisBangladeshCols.forEach(col => col.style.display = '');
+        // Show the header
+        ths.forEach(th => {
+          if (th.classList.contains('basisBangladesh')) {
+            th.style.display = '';
+          }
+        });
+      } else if (country === 'Pakistan') {
+        basisPakistanCols.forEach(col => col.style.display = '');
+        // Show the header
+        ths.forEach(th => {
+          if (th.classList.contains('basisPakistan')) {
+            th.style.display = '';
+          }
+        });
+      } else {
+        // If "All" is selected or no specific country, show all basis columns
+        basisIndiaCols.forEach(col => col.style.display = '');
+        basisBangladeshCols.forEach(col => col.style.display = '');
+        basisPakistanCols.forEach(col => col.style.display = '');
+
+        // Show all headers
+        ths.forEach(th => {
+          if (th.classList.contains('basisIndia') || th.classList.contains('basisBangladesh') || th.classList.contains('basisPakistan')) {
+            th.style.display = '';
+          }
+        });
+      }
+    }
+
+    /* -----------------------------------
        Error handling
     ----------------------------------- */
     function showError(msg) {
@@ -586,26 +717,30 @@
     <!-- ================================================ -->
     <h2>International Offer File</h2>
 
-    <div class="upload-section">
-      <p>
-        Upload a CSV file (or tab-delimited file) <strong>OR</strong> paste data manually.  
-        The data will remain stored in your browser’s localStorage and Firebase until you change it.
-      </p>
-      
-      <!-- Option 1: File Upload -->
-      <label for="offerFile"><strong>Upload File:</strong></label>
-      <input type="file" id="offerFile" accept=".csv, .txt" />
+    <!-- Collapsible Upload/Paste Data Section -->
+    <button type="button" class="collapsible" id="collapsibleUpload">Upload or Paste Data</button>
+    <div class="content" id="uploadContent">
+      <div class="upload-section">
+        <p>
+          Upload a CSV file (or tab-delimited file) <strong>OR</strong> paste data manually.  
+          The data will remain stored in your browser’s localStorage and Firebase until you change it.
+        </p>
+        
+        <!-- Option 1: File Upload -->
+        <label for="offerFile"><strong>Upload File:</strong></label>
+        <input type="file" id="offerFile" accept=".csv, .txt" />
 
-      <!-- Option 2: Paste Data -->
-      <label for="offerText"><strong>Paste Data Here:</strong></label>
-      <textarea id="offerText" rows="5" 
-                placeholder="For example, copy from Excel or a text file and paste here."></textarea>
+        <!-- Option 2: Paste Data -->
+        <label for="offerText"><strong>Paste Data Here:</strong></label>
+        <textarea id="offerText" rows="5" 
+                  placeholder="For example, copy from Excel or a text file and paste here."></textarea>
 
-      <div class="buttons">
-        <button id="btnLoadData">Load/Replace Data</button>
-        <button id="btnClearStorage" class="btn-clear">Clear Stored Offers</button>
+        <div class="buttons">
+          <button id="btnLoadData">Load/Replace Data</button>
+          <button id="btnClearStorage" class="btn-clear">Clear Stored Offers</button>
+        </div>
+        <p class="error" id="errorMessage" style="display:none;"></p>
       </div>
-      <p class="error" id="errorMessage" style="display:none;"></p>
     </div>
 
     <!-- ICE and Country Input -->
@@ -621,6 +756,7 @@
           <option value="India">India</option>
           <option value="Bangladesh">Bangladesh</option>
           <option value="Pakistan">Pakistan</option>
+          <option value="">All</option> <!-- Option to show all columns -->
         </select>
       </div>
     </div>
@@ -669,9 +805,9 @@
             <th>Crop Year</th>
             <th>Quality</th>
             <th>Shipment Month</th>
-            <th>Basis India</th>
-            <th>Basis Bangladesh</th>
-            <th>Basis Pakistan</th>
+            <th class="basisIndia">Basis India</th>
+            <th class="basisBangladesh">Basis Bangladesh</th>
+            <th class="basisPakistan">Basis Pakistan</th>
             <th>On Call Basis</th>
             <th>Price</th> <!-- New column for Price -->
           </tr>
