@@ -416,10 +416,9 @@
            <td class="basisIndia">${row.BasisIndia}</td>
            <td class="basisBangladesh">${row.BasisBangladesh}</td>
            <td class="basisPakistan">${row.BasisPakistan}</td>
-           <!-- New CN/C1 column -->
            <td>${row.CN_C1}</td>
            <td>${row.OnCallBasis}</td>
-           <td>${price.toFixed(2)}</td>`; // Show Price
+           <td>${price.toFixed(2)}</td>`;
         tbody.appendChild(tr);
       }
 
@@ -470,7 +469,7 @@
           return;
         }
 
-        // Convert each row to an object (added CN_C1 before OnCallBasis)
+        // Convert each row to an object
         const dataObjects = validRows.map(r => ({
           Origin: r[0],
           CropYear: r[1],
@@ -808,8 +807,8 @@
             <th>Crop Year</th>
             <th>Quality</th>
             <th>Shipment Month</th>
-            <!-- Renamed heading -->
-            <th class="basisIndia">Basis India(C50)</th>
+            <!-- Changed name back to "Basis India" -->
+            <th class="basisIndia">Basis India</th>
             <th class="basisBangladesh">Basis Bangladesh</th>
             <th class="basisPakistan">Basis Pakistan</th>
             <th>CN/C1</th> <!-- New Column -->
