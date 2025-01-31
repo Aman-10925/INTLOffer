@@ -416,6 +416,8 @@
            <td class="basisIndia">${row.BasisIndia}</td>
            <td class="basisBangladesh">${row.BasisBangladesh}</td>
            <td class="basisPakistan">${row.BasisPakistan}</td>
+           <!-- New CN/C1 column -->
+           <td>${row.CN_C1}</td>
            <td>${row.OnCallBasis}</td>
            <td>${price.toFixed(2)}</td>`; // Show Price
         tbody.appendChild(tr);
@@ -460,15 +462,15 @@
     function parseAndStoreData(text) {
       try {
         const rows = parseTextToArray(text);
-        // Validate column length (we expect 8 columns)
-        const validRows = rows.filter(r => r.length >= 8);
+        // Validate column length (now expecting at least 9 columns)
+        const validRows = rows.filter(r => r.length >= 9);
 
         if (validRows.length === 0) {
-          showError("No valid data found. Ensure your file has at least 8 columns per row.");
+          showError("No valid data found. Ensure your file has at least 9 columns per row.");
           return;
         }
 
-        // Convert each row to an object
+        // Convert each row to an object (added CN_C1 before OnCallBasis)
         const dataObjects = validRows.map(r => ({
           Origin: r[0],
           CropYear: r[1],
@@ -477,7 +479,8 @@
           BasisIndia: r[4],
           BasisBangladesh: r[5],
           BasisPakistan: r[6],
-          OnCallBasis: r[7]
+          CN_C1: r[7],
+          OnCallBasis: r[8]
         }));
 
         // Overwrite the global data
@@ -805,11 +808,13 @@
             <th>Crop Year</th>
             <th>Quality</th>
             <th>Shipment Month</th>
-            <th class="basisIndia">Basis India</th>
+            <!-- Renamed heading -->
+            <th class="basisIndia">Basis India(C50)</th>
             <th class="basisBangladesh">Basis Bangladesh</th>
             <th class="basisPakistan">Basis Pakistan</th>
+            <th>CN/C1</th> <!-- New Column -->
             <th>On Call Basis</th>
-            <th>Price</th> <!-- New column for Price -->
+            <th>Price</th>
           </tr>
         </thead>
         <tbody>
